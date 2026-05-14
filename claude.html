@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VALORANT Strat Roulette (Auto-Round)</title>
+    <style>
+        :root { --val-red: #ff4655; --val-dark: #0f1923; --val-blue: #111c22; --val-white: #ece8e1; --val-gold: #ffb800; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--val-dark); color: var(--val-white); display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { max-width: 1000px; width: 100%; background: var(--val-blue); padding: 25px; border-radius: 8px; border: 1px solid #3f4e5e; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h1 { color: var(--val-red); text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }
+        .setup-section { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #3f4e5e; align-items: center; }
+        .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 10px 0; font-size: 0.85em; max-height: 120px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid #3f4e5e; }
+        .player-area { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: #1f2933; padding: 15px; border-radius: 4px; border-top: 4px solid var(--val-red); }
+        .card h3 { margin: 0 0 15px 0; color: var(--val-red); display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px; min-height: 40px; }
+        .val { font-weight: bold; color: #00f2ff; text-align: right; padding: 0 10px; font-size: 0.95em; flex: 1; }
+        .punishment-box { margin-top: 30px; padding: 20px; background: rgba(255, 184, 0, 0.1); border: 2px dashed var(--val-gold); border-radius: 8px; text-align: center; }
+        .punishment-box h2 { color: var(--val-gold); margin-top: 0; text-transform: uppercase; }
+        #punishment-text { font-size: 1.4em; font-weight: bold; color: #fff; margin: 10px 0; }
+        button { background: var(--val-red); color: white; border: none; padding: 10px 18px; cursor: pointer; font-weight: bold; text-transform: uppercase; border-radius: 2px; transition: 0.2s; }
+        button:hover { filter: brightness(1.2); transform: scale(1.02); }
+        button.small { font-size: 0.65em; padding: 5px 8px; background: #3f4e5e; margin-left: 5px; flex-shrink: 0; }
+        button.weapon-btn { background: #00f2ff; color: #0f1923; }
+        input, select { background: #0f1923; color: white; border: 1px solid #3f4e5e; padding: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>VALORANT Strategist</h1>
+    
+    <div class="setup-section">
+        <div>
+            <label>Players: </label>
+            <select id="playerCount" onchange="initPlayers()">
+                <option value="1">1</option><option value="2">2</option>
+                <option value="3">3</option><option value="4">4</option><option value="5">5</option>
+            </select>
+        </div>
+        <div>
+            <label>Current Round: </label>
+            <input type="number" id="roundNum" value="1" min="1" max="4" style="width: 50px;">
+        </div>
+        <button onclick="rollAll()">Full Reset Roll</button>
+        <button style="background: #3f4e5e;" onclick="rollAllType('weapon')">Next Round (Advance + Gun)</button>
+    </div>
+
+    <div>
+        <strong>Agent Pool:</strong>
+        <div id="agentCheckboxes" class="agent-grid"></div>
+    </div>
+
+    <div id="playerArea" class="player-area"></div>
+
+    <div class="punishment-box">
+        <h2>Match Loss Punishment</h2>
+        <div id="punishment-text">Roll Full Reset to set a punishment...</div>
+    </div>
+</div>
+
+<script>
+    const allAgents = ["Brimstone", "Jett", "Phoenix", "Sage", "Sova", "Breach", "Cypher", "Omen", "Reyna", "Viper", "Killjoy", "Skye", "Yoru", "Astra", "KAY/O", "Chamber", "Neon", "Fade", "Harbor", "Gekko", "Deadlock", "Iso", "Vyse", "Clove", "Tejo", "Miks", "Waylay"];
+    const sidearms = ["Classic", "Shorty", "Frenzy", "Ghost", "Sheriff", "Bandit"];
+    const midGuns = ["Stinger", "Spectre", "Bucky", "Judge", "Bulldog", "Guardian", "Marshal", "Outlaw", "Ares", "Odin", "Phantom", "Vandal"];
+    const sites = ["A Site", "B Site", "C Site", "Mid/Lurk", "Follow Bottom Frag"];
+    
+    const challenges = [
+        "No Abilities", "Crouch Spray Only", "Walk Only", "Must Trade Teammate", "Jump Shot Only", "Pings Only", "No Comms", "Hip Fire Only",
+        "Knife only until enemy seen", "Use all util before shooting", "No ADS (Scopes)", "Stay touching a wall", 
+        "Only move while jumping", "Look at floor when not shooting", "Must say 'Meow' every kill", "Reload after every shot", 
+        "No Ultimates", "Crab-walk (crouch) whole round", "Hold breath while defusing", "Spray heart after kill",
+        "Pre-fire every corner", "Bodyguard: Stay 1m from Player 1", "Emote/Spray after every kill"
+    ];
+
+    const punishments = ["20 Pushups", "Gift a skin or 50 Squats", "Next game pistols only", "Post scoreboard on Discord", "Eat something spicy", "10 Burpees", "60s Plank"];
+
+    const grid = document.getElementById('agentCheckboxes');
+    allAgents.forEach(a => { grid.innerHTML += `<div><input type="checkbox" value="${a}" checked> ${a}</div>`; });
+
+    function getRand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function advanceRound() {
+        let rInput = document.getElementById('roundNum');
+        let current = parseInt(rInput.value);
+        if (current >= 4) {
+            rInput.value = 1;
+        } else {
+            rInput.value = current + 1;
+        }
+    }
+
+    function getWeapon() {
+        const round = parseInt(document.getElementById('roundNum').value);
+        if (round <= 2) return getRand(sidearms);
+        return getRand(midGuns); // Round 3 and 4 (No Op as per your rule)
+    }
+
+    function roll(type, pId) {
+        // If rolling a weapon specifically, we advance the round first
+        if (type === 'weapon') advanceRound();
+
+        const el = document.getElementById(`${type}-${pId}`);
+        if (type === 'agent') {
+            const owned = Array.from(document.querySelectorAll('#agentCheckboxes input:checked')).map(cb => cb.value);
+            el.innerText = owned.length > 0 ? getRand(owned) : "Select Agents!";
+        } else if (type === 'site') {
+            el.innerText = getRand(sites);
+        } else if (type === 'weapon') {
+            el.innerText = getWeapon();
+        } else if (type === 'challenge') {
+            el.innerText = getRand(challenges);
+        }
+    }
+
+    function initPlayers() {
+        const count = document.getElementById('playerCount').value;
+        const area = document.getElementById('playerArea');
+        area.innerHTML = '';
+        for (let i = 1; i <= count; i++) {
+            area.innerHTML += `
+                <div class="card">
+                    <h3>Player ${i}</h3>
+                    <div class="row"><span>Agent</span> <span class="val" id="agent-${i}">-</span> <button class="small" onclick="roll('agent', ${i})">Roll</button></div>
+                    <div class="row"><span>Objective</span> <span class="val" id="site-${i}">-</span> <button class="small" onclick="roll('site', ${i})">Roll</button></div>
+                    <div class="row"><span>Weapon</span> <span class="val" id="weapon-${i}">-</span> <button class="small weapon-btn" onclick="roll('weapon', ${i})">Roll</button></div>
+                    <div class="row"><span>Challenge</span> <span class="val" id="challenge-${i}">-</span> <button class="small" onclick="roll('challenge', ${i})">Roll</button></div>
+                </div>`;
+        }
+    }
+
+    function rollAll() {
+        // Reset round to 1 on a full reset
+        document.getElementById('roundNum').value = 1;
+        const count = document.getElementById('playerCount').value;
+        for (let i = 1; i <= count; i++) {
+            // Manually roll weapon here without double-advancing
+            document.getElementById(`agent-${i}`).innerText = getRand(Array.from(document.querySelectorAll('#agentCheckboxes input:checked')).map(cb => cb.value));
+            document.getElementById(`site-${i}`).innerText = getRand(sites);
+            document.getElementById(`weapon-${i}`).innerText = getWeapon();
+            document.getElementById(`challenge-${i}`).innerText = getRand(challenges);
+        }
+        document.getElementById('punishment-text').innerText = getRand(punishments);
+    }
+
+    function rollAllType(type) {
+        if (type === 'weapon') advanceRound();
+        const count = document.getElementById('playerCount').value;
+        for (let i = 1; i <= count; i++) {
+            const el = document.getElementById(`${type}-${i}`);
+            if (type === 'weapon') el.innerText = getWeapon();
+            else roll(type, i);
+        }
+    }
+
+    initPlayers();
+</script>
+
+</body>
+</html>
